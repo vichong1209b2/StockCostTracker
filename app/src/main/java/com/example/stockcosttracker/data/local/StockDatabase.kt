@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.stockcosttracker.data.local.entity.DailyPortfolioSnapshotEntity
 import com.example.stockcosttracker.data.local.entity.FeeConfigEntity
 import com.example.stockcosttracker.data.local.entity.PortfolioSnapshotEntity
@@ -21,7 +23,7 @@ import com.example.stockcosttracker.data.local.entity.StockTransactionEntity
         PortfolioSnapshotEntity::class,
         DailyPortfolioSnapshotEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class StockDatabase : RoomDatabase() {
@@ -32,6 +34,14 @@ abstract class StockDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: StockDatabase? = null
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE fee_config ADD COLUMN selectedBroker TEXT NOT NULL DEFAULT 'YUANTA'"
+                )
+            }
+        }
+
         fun getInstance(context: Context): StockDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -39,6 +49,7 @@ abstract class StockDatabase : RoomDatabase() {
                     StockDatabase::class.java,
                     "stock_cost_tracker.db"
                 )
+                    .addMigrations(MIGRATION_2_3)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }

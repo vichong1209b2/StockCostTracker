@@ -28,6 +28,7 @@ import com.example.stockcosttracker.data.local.entity.StockQuoteEntity
 import com.example.stockcosttracker.data.local.entity.StockTransactionEntity
 import com.example.stockcosttracker.data.remote.FinMindApiService
 import com.example.stockcosttracker.data.remote.FugleApiService
+import com.example.stockcosttracker.domain.model.Broker
 import com.example.stockcosttracker.domain.model.FeeConfig
 import com.example.stockcosttracker.domain.model.StockInfo
 import com.example.stockcosttracker.domain.model.StockQuote
@@ -42,9 +43,11 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 
 class StockRepository(
     private val dao: StockDao,
@@ -165,7 +168,6 @@ class StockRepository(
             val fetchedQuote = when (marketState) {
                 MarketState.TRADING -> {
                     fetchIntradayQuoteFromFugle(stockCode)
-                        ?: fetchClosingQuoteFromFinMind(stockCode)
                         ?: fetchMinuteQuoteFromFinMind(stockCode)
                 }
                 MarketState.AFTER_HOURS -> {
@@ -367,20 +369,30 @@ class StockRepository(
                 symbol = stockCode
             )
 
-            Log.d(tag, "Fugle response: stockCode=$stockCode, dto=$quote")
+            Log.d(
+                tag,
+                "Fugle response: stockCode=$stockCode, lastTrade=${quote.lastTrade?.price}, lastPrice=${quote.lastPrice}, closePrice=${quote.closePrice}, avgPrice=${quote.avgPrice}, openPrice=${quote.openPrice}, isClose=${quote.isClose}"
+            )
 
-            val currentPrice = quote.priceClose
-                ?: quote.priceAvg
-                ?: quote.priceOpen
-                ?: quote.priceReference
+            val currentPrice = quote.lastTrade?.price
+                ?: quote.lastPrice
+                ?: quote.closePrice
+                ?: quote.avgPrice
+                ?: quote.openPrice
+                ?: quote.referencePrice
 
             if (currentPrice == null) {
-                Log.w(tag, "Fugle price null: stockCode=$stockCode")
+                Log.w(tag, "Fugle price null: stockCode=$stockCode, all price fields are null")
                 null
             } else {
-                val updatedAt = quote.total?.time
-                    ?.takeIf { it.isNotBlank() && it.length > 10 }
-                    ?: LocalDateTime.now().toString()
+                val updatedAt = formatFugleTimestamp(
+                    quote.lastTrade?.time
+                        ?: quote.lastUpdated
+                        ?: quote.total?.time
+                        ?: quote.closeTime
+                ) ?: LocalDateTime.now().toString()
+
+                Log.d(tag, "Fugle success: stockCode=$stockCode, price=$currentPrice, updatedAt=$updatedAt")
 
                 StockQuoteEntity(
                     stockCode = stockCode,
@@ -390,6 +402,23 @@ class StockRepository(
             }
         }.onFailure { e ->
             Log.e(tag, "Fugle request failed: stockCode=$stockCode, message=${e.message}", e)
+        }.getOrNull()
+    }
+
+    private fun formatFugleTimestamp(timestamp: Long?): String? {
+        if (timestamp == null || timestamp <= 0L) return null
+
+        val millis = when {
+            timestamp > 10_000_000_000_000L -> timestamp / 1_000L
+            timestamp > 10_000_000_000L -> timestamp
+            else -> timestamp * 1_000L
+        }
+
+        return runCatching {
+            LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(millis),
+                ZoneId.systemDefault()
+            ).toString()
         }.getOrNull()
     }
 
@@ -573,7 +602,12 @@ private fun FeeConfigEntity.toDomain(): FeeConfig {
         brokerageFeeRate = brokerageFeeRate,
         brokerageFeeDiscountRate = brokerageFeeDiscountRate,
         brokerageMinimumFee = brokerageMinimumFee,
-        sellTaxRate = sellTaxRate
+        sellTaxRate = sellTaxRate,
+        selectedBroker = try {
+            Broker.valueOf(selectedBroker)
+        } catch (e: Exception) {
+            Broker.YUANTA
+        }
     )
 }
 
@@ -595,6 +629,7 @@ private fun FeeConfig.toEntity(): FeeConfigEntity {
         brokerageFeeRate = brokerageFeeRate,
         brokerageFeeDiscountRate = brokerageFeeDiscountRate,
         brokerageMinimumFee = brokerageMinimumFee,
-        sellTaxRate = sellTaxRate
+        sellTaxRate = sellTaxRate,
+        selectedBroker = selectedBroker.name
     )
 }

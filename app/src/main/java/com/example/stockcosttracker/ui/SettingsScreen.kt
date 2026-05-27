@@ -35,7 +35,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.stockcosttracker.domain.model.Broker
 
 private enum class DcaFeeMode {
     FIXED,
@@ -52,6 +54,9 @@ fun SettingsScreen(
         factory = PortfolioViewModel.provideFactory(context.applicationContext as Application)
     )
 
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    var selectedBroker by rememberSaveable { mutableStateOf(Broker.YUANTA) }
     var regularFeeRate by rememberSaveable { mutableStateOf("0.001425") }
     var regularMinimumFee by rememberSaveable { mutableStateOf("20") }
 
@@ -64,6 +69,12 @@ fun SettingsScreen(
     var useEstimatedSellTax by rememberSaveable { mutableStateOf(true) }
     var autoSyncDailyClosingOnLaunch by rememberSaveable {
         mutableStateOf(viewModel.isAutoAfterHoursSyncEnabled())
+    }
+
+    androidx.compose.runtime.LaunchedEffect(uiState) {
+        selectedBroker = uiState.feeConfig.selectedBroker
+        regularFeeRate = uiState.feeConfig.brokerageFeeRate.toString()
+        regularMinimumFee = uiState.feeConfig.brokerageMinimumFee.toString()
     }
 
     Scaffold(
@@ -86,6 +97,45 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "券商選擇",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "選擇您的券商以套用對應的手續費折扣",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Broker.entries.forEach { broker ->
+                        BrokerOptionRow(
+                            broker = broker,
+                            selected = selectedBroker == broker,
+                            onClick = { selectedBroker = broker }
+                        )
+                    }
+
+                    Text(
+                        text = "目前選擇：${selectedBroker.displayName}（${(selectedBroker.discountRate * 10).toInt()}折）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -253,7 +303,17 @@ fun SettingsScreen(
                     }
 
                     Button(
-                        onClick = { onNavigateBack() },
+                        onClick = {
+                            val feeConfig = com.example.stockcosttracker.domain.model.FeeConfig(
+                                brokerageFeeRate = regularFeeRate.toDoubleOrNull() ?: 0.001425,
+                                brokerageFeeDiscountRate = selectedBroker.discountRate,
+                                brokerageMinimumFee = regularMinimumFee.toDoubleOrNull() ?: 20.0,
+                                sellTaxRate = 0.003,
+                                selectedBroker = selectedBroker
+                            )
+                            viewModel.saveFeeConfig(feeConfig)
+                            onNavigateBack()
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("儲存")
@@ -280,6 +340,26 @@ private fun FeeModeOptionRow(
         )
         TextButton(onClick = onClick) {
             Text(title)
+        }
+    }
+}
+
+@Composable
+private fun BrokerOptionRow(
+    broker: Broker,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick
+        )
+        TextButton(onClick = onClick) {
+            Text("${broker.displayName}（${(broker.discountRate * 10).toInt()}折）")
         }
     }
 }

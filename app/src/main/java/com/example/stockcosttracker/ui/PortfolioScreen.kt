@@ -95,17 +95,17 @@ private val integerFormat = DecimalFormat("#,##0")
 private val lotFormat = DecimalFormat("#,##0.###")
 private val percentFormat = DecimalFormat("#,##0.##")
 
-private val SectionInputColor = Color(0xFFEAF4FF)
-private val SectionSummaryColor = Color(0xFFFFF7E8)
-private val SectionHoldingColor = Color(0xFFEFF8F1)
-private val SectionTransactionColor = Color(0xFFF5EEFF)
+private val SectionInputColor = Color(0xFFFFFFFF)
+private val SectionSummaryColor = Color(0xFFEAF6F8)
+private val SectionHoldingColor = Color(0xFFF2F8F3)
+private val SectionTransactionColor = Color(0xFFF7F2F5)
 
-private val PositiveRed = Color(0xFFC62828)
-private val PositiveRedBg = Color(0xFFC62828)
-private val NegativeGreen = Color(0xFF2E7D32)
-private val NegativeGreenBg = Color(0xFF2E7D32)
-private val NeutralGrayBg = Color(0xFFEEEEEE)
-private val NeutralGrayText = Color(0xFF424242)
+private val PositiveRed = Color(0xFFC43D4B)
+private val PositiveRedBg = Color(0xFFC43D4B)
+private val NegativeGreen = Color(0xFF1E8A5A)
+private val NegativeGreenBg = Color(0xFF1E8A5A)
+private val NeutralGrayBg = Color(0xFFE9EEF1)
+private val NeutralGrayText = Color(0xFF52616A)
 private val WhiteText = Color.White
 
 fun todayString(): String {
@@ -263,10 +263,6 @@ fun PortfolioScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val stockInfoMap = remember(uiState.stockInfos) {
-        uiState.stockInfos.associateBy { it.stockCode }
-    }
-
     val activeSummaries = remember(uiState.summaries) {
         uiState.summaries.filter { it.holdingShares > 0.0 }
     }
@@ -290,7 +286,7 @@ fun PortfolioScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("投資組合") },
+                title = { Text("股票損益追蹤") },
                 actions = {
                     TextButton(onClick = onOpenAddTransaction) {
                         Text("新增交易")
@@ -403,39 +399,60 @@ private fun ActionCard(
     onRefresh: () -> Unit
 ) {
     Card(
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFE9F3FF)
-        )
+            containerColor = Color(0xFFE3F2FD)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text(
-                text = "追蹤中股票：$trackedCount 檔",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "追蹤中股票",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1565C0)
+                )
+                Text(
+                    text = "$trackedCount 檔",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1565C0)
+                )
+            }
 
             Text(
                 text = "可手動重新整理目前持股的最新報價",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(
+                Button(
                     onClick = onRefresh,
-                    enabled = !isRefreshing
+                    enabled = !isRefreshing,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1976D2)
+                    )
                 ) {
                     if (isRefreshing) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp
+                            strokeWidth = 2.dp,
+                            color = Color.White
                         )
                     } else {
                         Text("重新整理報價")
@@ -489,23 +506,25 @@ private fun PortfolioOverviewCard(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = SectionSummaryColor
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
                 text = "投資組合摘要",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFE65100)
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SummaryMiniChip(
                     modifier = Modifier.weight(1f),
@@ -523,7 +542,7 @@ private fun PortfolioOverviewCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SummaryMiniChipTwoLine(
                     modifier = Modifier.weight(1f),
@@ -1390,7 +1409,7 @@ private fun PortfolioTrendCard(
                     expanded = trendMenuExpanded,
                     onDismissRequest = { trendMenuExpanded = false }
                 ) {
-                    listOf(5, 7, 10, 14, 21, 30).forEach { days ->
+                    trendOptions.forEach { days ->
                         DropdownMenuItem(
                             text = { Text("最近 ${days} 天") },
                             onClick = {
@@ -1487,10 +1506,10 @@ private fun TransactionGroupCard(
                 HorizontalDivider()
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    group.transactions.forEach { transaction ->
+                    group.transactionRecords.forEach { record ->
                         TransactionRow(
-                            transaction = transaction,
-                            onDelete = { onDelete(transaction) }
+                            record = record,
+                            onDelete = { onDelete(record.transaction) }
                         )
                     }
                 }
@@ -1501,13 +1520,24 @@ private fun TransactionGroupCard(
 
 @Composable
 private fun TransactionRow(
-    transaction: StockTransaction,
+    record: TransactionRecordUi,
     onDelete: () -> Unit
 ) {
+    val transaction = record.transaction
     val typeColor = if (transaction.transactionType == TransactionType.BUY) {
         Color(0xFF2E7D32)
     } else {
         Color(0xFFAD1457)
+    }
+    val netAmountLabel = when (transaction.transactionType) {
+        TransactionType.BUY -> "買進實付"
+        TransactionType.SELL -> "賣出實收"
+    }
+    val realizedProfitColor = when {
+        record.realizedProfit == null -> MaterialTheme.colorScheme.onSurface
+        record.realizedProfit > 0.0 -> PositiveRed
+        record.realizedProfit < 0.0 -> NegativeGreen
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
     Card(
@@ -1540,7 +1570,26 @@ private fun TransactionRow(
             InfoRow("價格", formatPriceValue(transaction.pricePerShare))
             InfoRow("張數", lotFormat.format(transaction.lotCount))
             InfoRow("股數", formatIntValue(transaction.shareCount.toDouble()))
-            InfoRow("金額", formatIntMoney(transaction.grossAmount))
+            InfoRow("成交金額", formatIntMoney(transaction.grossAmount))
+            InfoRow("手續費", formatIntMoney(record.brokerageFee))
+
+            if (transaction.transactionType == TransactionType.SELL) {
+                InfoRow("證交稅", formatIntMoney(record.tax))
+                record.costBasis?.let { costBasis ->
+                    InfoRow("賣出成本", formatIntMoney(costBasis))
+                }
+            }
+
+            InfoRow(netAmountLabel, formatIntMoney(record.netAmount), valueColor = typeColor)
+
+            if (transaction.transactionType == TransactionType.SELL) {
+                val profitText = record.realizedProfit?.let { profit ->
+                    val rateText = record.realizedProfitRate?.let { "（${percentFormat.format(it)}%）" }.orEmpty()
+                    "${formatSignedIntAmount(profit)}$rateText"
+                } ?: "無可用持股成本"
+
+                InfoRow("賣出損益", profitText, valueColor = realizedProfitColor)
+            }
 
             if (transaction.note.isNotBlank()) {
                 HorizontalDivider()

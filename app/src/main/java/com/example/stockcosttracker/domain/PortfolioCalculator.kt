@@ -185,7 +185,7 @@ object PortfolioCalculator {
     }
 
     private fun calculateBrokerageFee(amount: Double, feeConfig: FeeConfig): Double {
-        val rawFee = amount * feeConfig.brokerageFeeRate * feeConfig.brokerageFeeDiscountRate
+        val rawFee = amount * feeConfig.brokerageFeeRate * feeConfig.effectiveDiscountRate
         return if (rawFee < feeConfig.brokerageMinimumFee) {
             feeConfig.brokerageMinimumFee
         } else {

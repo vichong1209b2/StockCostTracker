@@ -5,16 +5,29 @@ import retrofit2.http.Header
 import retrofit2.http.Path
 
 data class FugleQuoteDto(
+    val date: String? = null,
+    val type: String? = null,
+    val exchange: String? = null,
+    val market: String? = null,
     val symbol: String? = null,
-    val priceHigh: Double? = null,
-    val priceLow: Double? = null,
-    val priceOpen: Double? = null,
-    val priceAvg: Double? = null,
-    val priceClose: Double? = null,
-    val priceReference: Double? = null,
-    val priceLimitHigh: Double? = null,
-    val priceLimitLow: Double? = null,
+    val name: String? = null,
+    val referencePrice: Double? = null,
+    val previousClose: Double? = null,
+    val openPrice: Double? = null,
+    val openTime: Long? = null,
+    val highPrice: Double? = null,
+    val highTime: Long? = null,
+    val lowPrice: Double? = null,
+    val lowTime: Long? = null,
+    val closePrice: Double? = null,
+    val closeTime: Long? = null,
+    val avgPrice: Double? = null,
+    val lastPrice: Double? = null,
+    val lastSize: Long? = null,
     val isClose: Boolean? = null,
+    val isTrial: Boolean? = null,
+    val lastUpdated: Long? = null,
+    val lastTrade: FugleTradeDto? = null,
     val total: FugleTotalDto? = null,
     val trial: Boolean? = null
 )
@@ -25,7 +38,16 @@ data class FugleTotalDto(
     val tradeVolumeAtBid: Long? = null,
     val tradeVolumeAtAsk: Long? = null,
     val transaction: Long? = null,
-    val time: String? = null
+    val time: Long? = null
+)
+
+data class FugleTradeDto(
+    val bid: Double? = null,
+    val ask: Double? = null,
+    val price: Double? = null,
+    val size: Long? = null,
+    val time: Long? = null,
+    val serial: Long? = null
 )
 
 interface FugleApiService {

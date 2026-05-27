@@ -30,16 +30,28 @@ import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
 
+data class TransactionRecordUi(
+    val transaction: StockTransaction,
+    val brokerageFee: Double,
+    val tax: Double,
+    val netAmount: Double,
+    val costBasis: Double? = null,
+    val realizedProfit: Double? = null,
+    val realizedProfitRate: Double? = null
+)
+
 data class TransactionGroupUi(
     val stockCode: String,
     val stockName: String,
     val transactions: List<StockTransaction>,
+    val transactionRecords: List<TransactionRecordUi>,
     val summary: PortfolioSummary?,
     val isExpanded: Boolean = false
 )
 
 data class PortfolioUiState(
     val isRefreshingQuotes: Boolean = false,
+    val feeConfig: FeeConfig = FeeConfig(),
     val stockInfos: List<StockInfo> = emptyList(),
     val summaries: List<PortfolioSummary> = emptyList(),
     val transactionGroups: List<TransactionGroupUi> = emptyList(),
@@ -130,12 +142,14 @@ class PortfolioViewModel(
 
             PortfolioUiState(
                 isRefreshingQuotes = refreshing,
+                feeConfig = baseData.feeConfig,
                 stockInfos = baseData.stockInfos,
                 summaries = summaries,
                 transactionGroups = buildTransactionGroups(
                     transactions = baseData.transactions,
                     stockInfos = baseData.stockInfos,
                     summaries = summaries,
+                    feeConfig = baseData.feeConfig,
                     expandedCodes = expandedCodes
                 ),
                 dailySnapshots = baseData.dailySnapshots
@@ -289,6 +303,12 @@ class PortfolioViewModel(
         }
     }
 
+    fun saveFeeConfig(config: FeeConfig) {
+        viewModelScope.launch {
+            repository.saveFeeConfig(config)
+        }
+    }
+
     fun addTransaction(
         stockCode: String,
         tradeDate: String,
@@ -426,6 +446,7 @@ class PortfolioViewModel(
         transactions: List<StockTransaction>,
         stockInfos: List<StockInfo>,
         summaries: List<PortfolioSummary>,
+        feeConfig: FeeConfig,
         expandedCodes: Set<String>
     ): List<TransactionGroupUi> {
         val stockNameMap = stockInfos.associateBy { it.stockCode }
@@ -434,18 +455,96 @@ class PortfolioViewModel(
         return transactions
             .groupBy { it.stockCode }
             .map { (stockCode, txs) ->
+                val records = buildTransactionRecords(
+                    transactions = txs,
+                    feeConfig = feeConfig
+                )
                 TransactionGroupUi(
                     stockCode = stockCode,
                     stockName = stockNameMap[stockCode]?.stockName.orEmpty(),
-                    transactions = txs.sortedWith(
-                        compareByDescending<StockTransaction> { it.tradeDate }
-                            .thenByDescending { it.id }
-                    ),
+                    transactions = records.map { it.transaction },
+                    transactionRecords = records,
                     summary = summaryMap[stockCode],
                     isExpanded = expandedCodes.contains(stockCode)
                 )
             }
             .sortedBy { it.stockCode }
+    }
+
+    private fun buildTransactionRecords(
+        transactions: List<StockTransaction>,
+        feeConfig: FeeConfig
+    ): List<TransactionRecordUi> {
+        var holdingShares = 0.0
+        var remainingCost = 0.0
+
+        val chronologicalRecords = transactions
+            .sortedWith(compareBy<StockTransaction> { it.tradeDate }.thenBy { it.id })
+            .map { tx ->
+                val gross = tx.grossAmount
+
+                when (tx.transactionType) {
+                    TransactionType.BUY -> {
+                        val buyFee = calculateBuyFee(gross, feeConfig)
+                        val netAmount = gross + buyFee
+
+                        holdingShares += tx.shareCount
+                        remainingCost += netAmount
+
+                        TransactionRecordUi(
+                            transaction = tx,
+                            brokerageFee = buyFee,
+                            tax = 0.0,
+                            netAmount = netAmount
+                        )
+                    }
+
+                    TransactionType.SELL -> {
+                        val sellFee = calculateSellFee(gross, feeConfig)
+                        val sellTax = calculateSellTax(gross, feeConfig)
+                        val netAmount = gross - sellFee - sellTax
+
+                        val sellShares = min(tx.shareCount, holdingShares)
+                        val averageCostPerShare = if (holdingShares > 0.0) {
+                            remainingCost / holdingShares
+                        } else {
+                            0.0
+                        }
+                        val costBasis = averageCostPerShare * sellShares
+                        val realizedProfit = if (sellShares > 0.0) {
+                            netAmount - costBasis
+                        } else {
+                            null
+                        }
+                        val realizedProfitRate = if (realizedProfit != null && costBasis > 0.0) {
+                            realizedProfit / costBasis * 100.0
+                        } else {
+                            null
+                        }
+
+                        holdingShares -= sellShares
+                        remainingCost -= costBasis
+
+                        if (holdingShares < 0.0) holdingShares = 0.0
+                        if (remainingCost < 0.0) remainingCost = 0.0
+
+                        TransactionRecordUi(
+                            transaction = tx,
+                            brokerageFee = sellFee,
+                            tax = sellTax,
+                            netAmount = netAmount,
+                            costBasis = costBasis,
+                            realizedProfit = realizedProfit,
+                            realizedProfitRate = realizedProfitRate
+                        )
+                    }
+                }
+            }
+
+        return chronologicalRecords.sortedWith(
+            compareByDescending<TransactionRecordUi> { it.transaction.tradeDate }
+                .thenByDescending { it.transaction.id }
+        )
     }
 
     private fun buildPortfolioSummaries(
@@ -574,12 +673,12 @@ class PortfolioViewModel(
     }
 
     private fun calculateBuyFee(amount: Double, feeConfig: FeeConfig): Double {
-        val fee = amount * feeConfig.brokerageFeeRate * feeConfig.brokerageFeeDiscountRate
+        val fee = amount * feeConfig.brokerageFeeRate * feeConfig.effectiveDiscountRate
         return max(feeConfig.brokerageMinimumFee, fee)
     }
 
     private fun calculateSellFee(amount: Double, feeConfig: FeeConfig): Double {
-        val fee = amount * feeConfig.brokerageFeeRate * feeConfig.brokerageFeeDiscountRate
+        val fee = amount * feeConfig.brokerageFeeRate * feeConfig.effectiveDiscountRate
         return max(feeConfig.brokerageMinimumFee, fee)
     }
 
